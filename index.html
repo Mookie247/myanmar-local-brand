@@ -326,7 +326,7 @@
       .rail-item:hover svg{transform:translateY(-6px)}
       .rail-item:focus-visible{outline:2px solid var(--lime-deep);outline-offset:2px;border-radius:8px}
       .rail-item.fall{transform:translateY(62vh) rotate(var(--rot,16deg));opacity:0;pointer-events:none}
-      .rail-item.picked{transform:scale(.55) translateY(14px);opacity:0;pointer-events:none}
+      .rail-item.picked{transform:scale(1.14) translateY(10px);opacity:0;pointer-events:none}
       .stage{margin:auto auto 0;padding:6px 16px 30px;text-align:center;animation:popIn .55s cubic-bezier(.22,1.25,.36,1) both}
       .stage-bob{position:relative;display:inline-block;animation:floaty 4.6s ease-in-out infinite}
       .stage-garment svg{height:min(38vh,340px);width:auto;max-width:78vw;filter:drop-shadow(0 22px 18px rgba(23,23,28,.16))}
@@ -343,6 +343,24 @@
       .stage-back{display:block;margin:14px auto 0;background:none;border:none;color:#8a877e;font-size:.82rem;font-weight:600;padding:6px}
       .stage-back:hover{color:#17171c}
       .lime-strip{margin-top:auto;height:16px;background:var(--lime);flex:none}
+
+      /* ---------- stage inspection: front/back, zoom details, same-rail colourways ---------- */
+      .stage-zoom{transition:transform .6s cubic-bezier(.22,1.2,.36,1);will-change:transform;position:relative;z-index:2}
+      .stage-tools{margin:4px auto 6px;display:flex;flex-direction:column;align-items:center;gap:10px;padding:0 8px}
+      .seg{display:inline-flex;border:1px solid #ddd8cc;border-radius:99px;padding:3px;background:#fff}
+      .seg-btn{border:none;background:transparent;padding:7px 18px;border-radius:99px;font-size:.8rem;font-weight:700;color:#8a877e;transition:background .2s ease,color .2s ease}
+      .seg-btn.sel{background:#17171c;color:#faf9f5}
+      .detail-chips{display:flex;gap:7px;flex-wrap:wrap;justify-content:center}
+      .dchip{border:1px solid #ddd8cc;background:#fff;border-radius:99px;padding:6px 14px;font-size:.78rem;font-weight:600;color:#55534c;transition:border-color .2s ease,color .2s ease,background .2s ease}
+      .dchip:hover{border-color:#17171c;color:#17171c}
+      .dchip.sel{border-color:var(--lime-deep);background:var(--accent-soft);color:#17171c}
+      .tools-label{font-size:.8rem;color:#8a877e;line-height:1.9}
+      .rail-swatches{display:flex;gap:8px;justify-content:center;flex-wrap:wrap}
+      .rswatch{width:46px;height:54px;border:1px solid #e3ded2;border-radius:10px;background:#fff;padding:3px;cursor:pointer;transition:transform .2s ease,border-color .2s ease}
+      .rswatch svg{width:100%;height:100%}
+      .rswatch:hover{transform:translateY(-3px)}
+      .rswatch.sel{border-color:#17171c;box-shadow:0 0 0 1px #17171c}
+      .stage-note{margin:0;font-size:.85rem;color:#8a877e;max-width:32rem;line-height:1.9;text-align:center}
 
       /* ---------- rails grouped by clothing type ---------- */
       .rails{display:flex;flex-direction:column;width:100%}
@@ -441,13 +459,30 @@
         <div class="rails" id="rails"></div>
         <div class="stage" id="stage" hidden>
           <div class="stage-bob">
-            <div class="stage-garment" id="stageGarment"></div>
+            <div class="stage-zoom" id="stageZoom">
+              <div class="stage-garment" id="stageGarment"></div>
+            </div>
             <div class="stage-tags" id="stageTags" hidden>
               <button class="tag-swatch tag-yellow" id="tagFront" aria-label="အဝါရောင် — ရှေ့ဘက်ပုံ"></button>
               <button class="tag-swatch tag-blue" id="tagBack" aria-label="အပြာရောင် — နောက်ဘက်ပုံ နံပါတ် 25"></button>
             </div>
           </div>
           <p class="stage-name" id="stageName"></p>
+          <div class="stage-tools" id="stageTools">
+            <div class="seg" role="group" aria-label="ရှေ့ဘက် နောက်ဘက် ရွေးရန်">
+              <button type="button" class="seg-btn sel" id="viewFront">ရှေ့ဘက် · Front</button>
+              <button type="button" class="seg-btn" id="viewBack">နောက်ဘက် · Back</button>
+            </div>
+            <div class="detail-chips" role="group" aria-label="အနီးကပ် ကြည့်ရန်">
+              <button type="button" class="dchip sel" data-zoom="full">အပြည့်ပုံ</button>
+              <button type="button" class="dchip" data-zoom="collar" id="chipCollar">လည်ပင်း</button>
+              <button type="button" class="dchip" data-zoom="print" id="chipPrint">ရင်ဘတ်</button>
+              <button type="button" class="dchip" data-zoom="fabric">အဝတ်သား</button>
+            </div>
+            <span class="tools-label">တူညီတဲ့ အဝတ်တန်းက အရောင်များ — နောက်တစ်ထည် ဆွဲယူသလို ပြောင်းကြည့်ပါ</span>
+            <div class="rail-swatches" id="railSwatches"></div>
+            <p class="stage-note" id="stageNote"></p>
+          </div>
           <button class="stage-pill" id="stagePill">လှည်းထဲထည့်မယ်</button>
           <button class="stage-back" id="stageBack">← အဝတ်တန်းများသို့ ပြန်သွားရန်</button>
         </div>
@@ -938,58 +973,153 @@
       });
 
       /* ---------- rail hero (reel style) ---------- */
+      var garmentUID = 0;
+      function shade(hex, pct){
+        var h = String(hex).replace("#", "");
+        if (h.length !== 6) return hex;
+        var n = parseInt(h, 16);
+        if (isNaN(n)) return hex;
+        var r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
+        var t = pct < 0 ? 0 : 255, p = Math.abs(pct) / 100;
+        r = Math.round(r + (t - r) * p); g = Math.round(g + (t - g) * p); b = Math.round(b + (t - b) * p);
+        return "rgb(" + r + "," + g + "," + b + ")";
+      }
       function garmentSVG(o){
-        var outline = 'stroke="rgba(20,20,25,.18)" stroke-width="1.5"';
-        var hanger = '<path d="M100 20 v-5 a7 7 0 1 1 7 -7" fill="none" stroke="#9a968c" stroke-width="3" stroke-linecap="round"/>' +
-          '<path d="M100 20 L38 50 M100 20 L162 50" stroke="#9a968c" stroke-width="3" stroke-linecap="round"/>';
-        if (o.type === "pants"){
-          hanger += '<line x1="46" y1="50" x2="154" y2="50" stroke="#9a968c" stroke-width="4" stroke-linecap="round"/>';
+        var uid = "g" + (++garmentUID);
+        var dk = "rgba(18,18,24,", wh = "rgba(255,255,255,";
+        var outline = 'stroke="rgba(20,20,25,.20)" stroke-width="1.4"';
+        var stitch = 'fill="none" stroke="rgba(20,20,25,.30)" stroke-width="1" stroke-dasharray="3 2.4" stroke-linecap="round"';
+        var isPants = o.type === "pants", isLong = o.type === "long";
+        var body;
+        if (isPants) body = "M63 54 L137 54 L141 210 L113 210 L101 106 L99 106 L87 210 L59 210 Z";
+        else if (isLong) body = "M68 48 L36 60 L22 196 L50 200 L54 128 L54 204 Q54 216 66 216 L134 216 Q146 216 146 204 L146 128 L150 200 L178 196 L164 60 L132 48 Q118 68 100 68 Q82 68 68 48 Z";
+        else body = "M68 48 L38 60 L18 108 L46 118 L46 204 Q46 216 58 216 L142 216 Q154 216 154 204 L154 118 L182 108 L162 60 L132 48 Q118 68 100 68 Q82 68 68 48 Z";
+        var defs = '<defs>' +
+          '<linearGradient id="' + uid + 'f" x1="0" y1="0" x2=".65" y2="1">' +
+            '<stop offset="0" stop-color="' + shade(o.fill, 16) + '"/><stop offset=".48" stop-color="' + o.fill + '"/><stop offset="1" stop-color="' + shade(o.fill, -13) + '"/></linearGradient>' +
+          '<linearGradient id="' + uid + 's" x1="0" y1="0" x2="1" y2="0">' +
+            '<stop offset="0" stop-color="#000" stop-opacity=".20"/><stop offset=".16" stop-color="#000" stop-opacity=".02"/><stop offset=".38" stop-color="#fff" stop-opacity=".15"/><stop offset=".62" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity=".24"/></linearGradient>' +
+          '<linearGradient id="' + uid + 'v" x1="0" y1="0" x2="0" y2="1">' +
+            '<stop offset="0" stop-color="#fff" stop-opacity=".13"/><stop offset=".35" stop-color="#fff" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity=".12"/></linearGradient>' +
+          '<pattern id="' + uid + 'w" width="3" height="3" patternUnits="userSpaceOnUse"><path d="M0 1.5 H3 M1.5 0 V3" stroke="rgba(20,20,25,.055)" stroke-width=".7"/></pattern>' +
+          '<pattern id="' + uid + 'm" width="5" height="5" patternUnits="userSpaceOnUse"><circle cx="1.4" cy="1.4" r=".85" fill="rgba(20,20,25,.13)"/><circle cx="3.9" cy="3.9" r=".85" fill="rgba(255,255,255,.10)"/></pattern>' +
+          '<clipPath id="' + uid + 'c"><path d="' + body + '"/></clipPath></defs>';
+        var hanger = '<path d="M100 21 v-5 a7 7 0 1 1 7 -7" fill="none" stroke="#98958c" stroke-width="3" stroke-linecap="round"/>' +
+          '<path d="M100 21 L38 51 M100 21 L162 51" stroke="#98958c" stroke-width="3" stroke-linecap="round"/>' +
+          '<circle cx="100" cy="21" r="3" fill="#7c7a72"/>';
+        if (isPants) hanger += '<line x1="46" y1="51" x2="154" y2="51" stroke="#98958c" stroke-width="4" stroke-linecap="round"/><rect x="58" y="46" width="7" height="10" rx="2" fill="#7c7a72"/><rect x="135" y="46" width="7" height="10" rx="2" fill="#7c7a72"/>';
+        function foldSet(list){
+          return list.map(function(d){
+            return '<path d="' + d + '" fill="none" stroke="' + dk + '.10)" stroke-width="3.4" stroke-linecap="round"/>' +
+                   '<path d="' + d + '" fill="none" stroke="' + wh + '.12)" stroke-width="1.3" stroke-linecap="round" transform="translate(2.8,0)"/>';
+          }).join("");
         }
-        var body, extra = "";
-        if (o.type === "pants"){
-          body = '<path d="M63 54 L137 54 L141 210 L113 210 L101 106 L99 106 L87 210 L59 210 Z" fill="' + o.fill + '" ' + outline + '/>';
-          extra += '<rect x="62" y="54" width="76" height="13" fill="rgba(20,20,25,.13)"/>';
-          extra += '<circle cx="100" cy="60" r="2.6" fill="rgba(20,20,25,.4)"/>';
-          extra += '<path d="M64 76 Q76 82 84 80" fill="none" stroke="rgba(20,20,25,.22)" stroke-width="2"/>';
-          extra += '<path d="M136 76 Q124 82 116 80" fill="none" stroke="rgba(20,20,25,.22)" stroke-width="2"/>';
-          extra += '<line x1="74" y1="120" x2="76" y2="204" stroke="rgba(20,20,25,.14)" stroke-width="2"/>';
-          extra += '<line x1="126" y1="120" x2="124" y2="204" stroke="rgba(20,20,25,.14)" stroke-width="2"/>';
-        } else if (o.type === "long"){
-          body = '<path d="M68 48 L36 60 L22 196 L50 200 L54 128 L54 204 Q54 216 66 216 L134 216 Q146 216 146 204 L146 128 L150 200 L178 196 L164 60 L132 48 Q118 68 100 68 Q82 68 68 48 Z" fill="' + o.fill + '" ' + outline + '/>';
+        var folds = "", clipExtra = "";
+        if (isPants){
+          folds = foldSet(["M73 88 C75 126 74 168 76 200", "M127 88 C125 126 126 168 124 200"]);
+          folds += '<path d="M80 92 L79 202" stroke="' + dk + '.07)" stroke-width="2"/><path d="M120 92 L121 202" stroke="' + dk + '.07)" stroke-width="2"/>';
+          clipExtra = '<rect x="59" y="54" width="82" height="13" fill="' + dk + '.10)"/>';
         } else {
-          body = '<path d="M68 48 L38 60 L18 108 L46 118 L46 204 Q46 216 58 216 L142 216 Q154 216 154 204 L154 118 L182 108 L162 60 L132 48 Q118 68 100 68 Q82 68 68 48 Z" fill="' + o.fill + '" ' + outline + '/>';
-        }
-        if (o.type === "tee"){
-          extra += '<path d="M84 50 Q100 68 116 50" fill="none" stroke="rgba(20,20,25,.28)" stroke-width="4"/>';
-        }
-        if (o.type === "hoodie"){
-          extra += '<path d="M76 54 Q100 16 124 54 Q112 40 100 40 Q88 40 76 54 Z" fill="' + o.fill + '" stroke="rgba(20,20,25,.20)" stroke-width="1.5"/>';
-          extra += '<line x1="92" y1="64" x2="90" y2="86" stroke="' + o.trim + '" stroke-width="3" stroke-linecap="round"/>';
-          extra += '<line x1="108" y1="64" x2="110" y2="86" stroke="' + o.trim + '" stroke-width="3" stroke-linecap="round"/>';
-          extra += '<rect x="72" y="166" width="56" height="30" rx="6" fill="none" stroke="rgba(20,20,25,.22)" stroke-width="2"/>';
-        }
-        if (o.type === "jersey"){
-          if (o.back){
-            extra += '<path d="M82 52 Q100 64 118 52" fill="none" stroke="' + o.trim + '" stroke-width="5"/>';
-            extra += '<text x="100" y="158" text-anchor="middle" font-family="Manrope,sans-serif" font-size="64" font-weight="800" fill="#ffffff">25</text>';
-            extra += '<path d="M26 94 L48 104" stroke="' + o.trim + '" stroke-width="5"/>';
-            extra += '<path d="M174 94 L152 104" stroke="' + o.trim + '" stroke-width="5"/>';
-          } else {
-            extra += '<path d="M84 50 L100 80 L116 50" fill="none" stroke="' + o.trim + '" stroke-width="6"/>';
-            extra += '<path d="M26 94 L48 104" stroke="' + o.trim + '" stroke-width="5"/>';
-            extra += '<path d="M174 94 L152 104" stroke="' + o.trim + '" stroke-width="5"/>';
-            extra += '<circle cx="100" cy="120" r="13" fill="' + o.trim + '"/>';
-            extra += '<text x="100" y="125" text-anchor="middle" font-family="Manrope,sans-serif" font-size="10" font-weight="800" fill="#17171c">M</text>';
+          folds = foldSet(["M63 80 C59 118 61 162 58 198", "M137 80 C141 118 139 162 142 198", "M84 128 C82 156 84 184 82 204"]);
+          folds += '<path d="M47 120 Q59 128 65 142" fill="none" stroke="' + dk + '.12)" stroke-width="2.4" stroke-linecap="round"/>' +
+                   '<path d="M153 120 Q141 128 135 142" fill="none" stroke="' + dk + '.12)" stroke-width="2.4" stroke-linecap="round"/>' +
+                   '<ellipse cx="100" cy="212" rx="46" ry="5" fill="' + dk + '.05)"/>';
+          var band = isLong ? "M54 190 L146 190 L146 204 Q146 216 134 216 L66 216 Q54 216 54 204 Z" : "M46 190 L154 190 L154 204 Q154 216 142 216 L58 216 Q46 216 46 204 Z";
+          clipExtra = '<path d="' + band + '" fill="' + dk + '.06)"/>';
+          if (o.type === "jersey") clipExtra += '<path d="M50 118 L59 118 L59 208 L50 208 Z" fill="' + dk + '.05)"/><path d="M141 118 L150 118 L150 208 L141 208 Z" fill="' + dk + '.05)"/>';
+          if (o.type === "hoodie" && !o.back){
+            var ribs = "";
+            for (var rx = 56; rx <= 144; rx += 7) ribs += '<line x1="' + rx + '" y1="192" x2="' + rx + '" y2="213" stroke="' + dk + '.06)" stroke-width="2"/>';
+            clipExtra += ribs;
           }
         }
-        if (o.graphic){
-          extra += '<rect x="76" y="98" width="48" height="58" fill="#17171c"/>';
-          extra += '<circle cx="100" cy="118" r="11" fill="' + o.graphic + '"/>';
-          extra += '<rect x="84" y="138" width="32" height="4" fill="' + o.graphic + '"/>';
-          extra += '<rect x="88" y="147" width="24" height="4" fill="#faf9f5"/>';
+        var shadeGroup = '<g clip-path="url(#' + uid + 'c)">' +
+          '<path d="' + body + '" fill="url(#' + uid + 's)"/>' +
+          '<path d="' + body + '" fill="url(#' + uid + 'v)"/>' +
+          '<path d="' + body + '" fill="url(#' + (o.type === "jersey" ? uid + "m" : uid + "w") + ')"/>' +
+          folds + clipExtra + '</g>';
+        var base = '<path d="' + body + '" fill="url(#' + uid + 'f)" ' + outline + '/>';
+        var det = "";
+        if (!isPants){
+          var hemStitch = isLong ? "M60 205 Q100 210 140 205" : "M52 205 Q100 211 148 205";
+          det += '<path d="' + hemStitch + '" ' + stitch + '/>';
+          if (isLong){
+            det += '<path d="M25 185 L51 189" stroke="' + dk + '.16)" stroke-width="6"/><path d="M175 185 L149 189" stroke="' + dk + '.16)" stroke-width="6"/>';
+          } else {
+            det += '<path d="M24 98 L47 108" stroke="' + dk + '.15)" stroke-width="5"/><path d="M176 98 L153 108" stroke="' + dk + '.15)" stroke-width="5"/>';
+          }
         }
-        return '<svg viewBox="0 0 200 230" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">' + hanger + body + extra + '</svg>';
+        if (o.type === "tee" || isLong){
+          if (o.back){
+            det += '<path d="M82 47 Q100 59 118 47" fill="none" stroke="' + shade(o.fill, -22) + '" stroke-width="6" stroke-linecap="round"/>';
+            det += '<path d="M58 88 Q100 98 142 88" ' + stitch + '/>';
+            det += '<path d="M71 51 L44 61" ' + stitch + '/><path d="M129 51 L156 61" ' + stitch + '/>';
+          } else {
+            det += '<path d="M81 46 Q100 73 119 46" fill="none" stroke="' + shade(o.fill, -22) + '" stroke-width="6.5" stroke-linecap="round"/>';
+            det += '<path d="M84 48 Q100 68 116 48" fill="none" stroke="' + dk + '.22)" stroke-width="1.2"/>';
+            det += '<path d="M86 55 Q100 71 114 55" ' + stitch + '/>';
+            if (isLong && o.graphic){
+              det += '<g><rect x="74" y="96" width="52" height="62" rx="3" fill="#17171c" opacity=".94"/>' +
+                '<rect x="74" y="96" width="52" height="26" rx="3" fill="' + wh + '.07)"/>' +
+                '<circle cx="100" cy="118" r="11" fill="' + o.graphic + '"/>' +
+                '<rect x="84" y="138" width="32" height="4" fill="' + o.graphic + '"/>' +
+                '<rect x="88" y="147" width="24" height="4" fill="#faf9f5"/></g>';
+            }
+          }
+        }
+        if (o.type === "hoodie"){
+          if (o.back){
+            det += '<path d="M69 62 Q100 2 131 62 Q117 38 100 38 Q83 38 69 62 Z" fill="url(#' + uid + 'f)" ' + outline + '/>';
+            det += '<path d="M100 14 L100 42" ' + stitch + '/>';
+            det += '<path d="M58 90 Q100 100 142 90" ' + stitch + '/>';
+          } else {
+            det += '<path d="M84 52 Q100 68 116 52" fill="none" stroke="' + shade(o.fill, -18) + '" stroke-width="4.5" stroke-linecap="round"/>';
+            det += '<path d="M73 59 Q100 11 127 59 Q114 37 100 37 Q86 37 73 59 Z" fill="url(#' + uid + 'f)" ' + outline + '/>';
+            det += '<path d="M85 53 Q100 28 115 53 Q108 43 100 43 Q92 43 85 53 Z" fill="' + shade(o.fill, -20) + '"/>';
+            det += '<line x1="93" y1="63" x2="90" y2="87" stroke="' + o.trim + '" stroke-width="3" stroke-linecap="round"/><circle cx="90" cy="89" r="2.2" fill="' + o.trim + '"/>';
+            det += '<line x1="107" y1="63" x2="110" y2="87" stroke="' + o.trim + '" stroke-width="3" stroke-linecap="round"/><circle cx="110" cy="89" r="2.2" fill="' + o.trim + '"/>';
+            det += '<rect x="70" y="160" width="60" height="35" rx="7" fill="' + dk + '.05)" stroke="' + dk + '.20)" stroke-width="1.6"/>';
+            det += '<rect x="75" y="165" width="50" height="25" rx="5" ' + stitch + '/>';
+            det += '<path d="M70 168 L82 178 M130 168 L118 178" stroke="' + dk + '.20)" stroke-width="1.6"/>';
+          }
+        }
+        if (o.type === "jersey"){
+          det += '<path d="M24 95 L48 105" stroke="' + o.trim + '" stroke-width="5"/><path d="M176 95 L152 105" stroke="' + o.trim + '" stroke-width="5"/>';
+          if (o.back){
+            det += '<path d="M82 46 Q100 60 118 46" fill="none" stroke="' + o.trim + '" stroke-width="6" stroke-linecap="round"/>';
+            det += '<text x="101.5" y="98" text-anchor="middle" font-family="Manrope,sans-serif" font-size="11" font-weight="700" letter-spacing="4" fill="' + dk + '.18)">STUDIO</text>';
+            det += '<text x="100" y="96" text-anchor="middle" font-family="Manrope,sans-serif" font-size="11" font-weight="700" letter-spacing="4" fill="#ffffff">STUDIO</text>';
+            det += '<text x="101.5" y="170" text-anchor="middle" font-family="Manrope,sans-serif" font-size="74" font-weight="800" fill="' + dk + '.16)">25</text>';
+            det += '<text x="100" y="168" text-anchor="middle" font-family="Manrope,sans-serif" font-size="74" font-weight="800" fill="#ffffff">25</text>';
+          } else {
+            det += '<path d="M83 46 L100 82 L117 46" fill="none" stroke="' + o.trim + '" stroke-width="7" stroke-linejoin="round" stroke-linecap="round"/>';
+            det += '<path d="M89 51 L100 73 L111 51" fill="none" stroke="' + dk + '.16)" stroke-width="2"/>';
+            det += '<circle cx="100" cy="122" r="13.5" fill="' + o.trim + '"/><circle cx="100" cy="122" r="13.5" fill="none" stroke="' + wh + '.55)" stroke-width="1.4"/>';
+            det += '<text x="100" y="127" text-anchor="middle" font-family="Manrope,sans-serif" font-size="10.5" font-weight="800" fill="#17171c">M</text>';
+            det += '<text x="100" y="152" text-anchor="middle" font-family="Manrope,sans-serif" font-size="7" font-weight="700" letter-spacing="2.5" fill="' + dk + '.45)">STUDIO</text>';
+          }
+        }
+        if (isPants){
+          det += '<path d="M63 67 L137 67" ' + stitch + '/>';
+          det += '<path d="M61 199 L86 199 M114 199 L139 199" stroke="' + dk + '.15)" stroke-width="5"/>';
+          if (o.back){
+            det += '<path d="M62 76 Q100 86 138 76" ' + stitch + '/>';
+            det += '<rect x="65" y="86" width="21" height="17" rx="2" fill="' + dk + '.04)" stroke="' + dk + '.22)" stroke-width="1.4"/>';
+            det += '<rect x="114" y="86" width="21" height="17" rx="2" fill="' + dk + '.04)" stroke="' + dk + '.22)" stroke-width="1.4"/>';
+            det += '<path d="M100 68 L100 100" ' + stitch + '/>';
+          } else {
+            det += '<circle cx="100" cy="60" r="2.8" fill="' + dk + '.45)"/>';
+            det += '<path d="M100 67 L100 94" ' + stitch + '/>';
+            det += '<path d="M64 78 Q77 84 85 81" fill="none" stroke="' + dk + '.24)" stroke-width="1.8"/>';
+            det += '<path d="M136 78 Q123 84 115 81" fill="none" stroke="' + dk + '.24)" stroke-width="1.8"/>';
+            det += '<rect x="66" y="54" width="4.5" height="13" fill="' + shade(o.fill, -10) + '" stroke="' + dk + '.18)"/>';
+            det += '<rect x="97.5" y="54" width="4.5" height="13" fill="' + shade(o.fill, -10) + '" stroke="' + dk + '.18)"/>';
+            det += '<rect x="129" y="54" width="4.5" height="13" fill="' + shade(o.fill, -10) + '" stroke="' + dk + '.18)"/>';
+          }
+        }
+        return '<svg viewBox="0 0 200 230" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">' + defs + hanger + base + shadeGroup + det + '</svg>';
       }
+
       var RAILS = [
         {label:"Jerseys", my:"ဂျာစီ", items:[
           {name:"Sky Studio Jersey", product:10, type:"jersey", fill:"#a9cdec", trim:"#b7f73d"},
@@ -1030,6 +1160,7 @@
         rail.className = "rail";
         rail.setAttribute("aria-label", group.label + " အဝတ်တန်း");
         group.items.forEach(function(item){
+          item.groupRef = group;
           var b = document.createElement("button");
           b.className = "rail-item";
           b.setAttribute("aria-label", item.name);
@@ -1042,8 +1173,8 @@
         railsEl.appendChild(wrap);
       });
       function stageConfig(){
-        var o = {type:stageItem.type, fill:stageItem.fill, trim:stageItem.trim, graphic:stageItem.graphic, back:false};
-        if (stageItem.type === "jersey" && stageVariant === "back"){ o.fill = "#2456c8"; o.trim = "#b7f73d"; o.back = true; }
+        var o = {type:stageItem.type, fill:stageItem.fill, trim:stageItem.trim, graphic:stageItem.graphic, back:stageVariant === "back"};
+        if (stageItem.type === "jersey" && stageVariant === "back"){ o.fill = "#2456c8"; o.trim = "#b7f73d"; }
         return o;
       }
       function renderStage(){
@@ -1051,7 +1182,16 @@
         g.innerHTML = garmentSVG(stageConfig());
         g.style.animation = "none"; void g.offsetWidth;
         g.style.animation = "stageIn .65s cubic-bezier(.22,1.2,.36,1) both";
-        document.getElementById("stageName").textContent = stageItem.name + (stageItem.type === "jersey" && stageVariant === "back" ? " · Back No. 25" : "");
+        var suffix = "";
+        if (stageVariant === "back") suffix = stageItem.type === "jersey" ? " · Back No. 25" : " · Back";
+        document.getElementById("stageName").textContent = stageItem.name + suffix;
+        document.getElementById("viewFront").classList.toggle("sel", stageVariant === "front");
+        document.getElementById("viewBack").classList.toggle("sel", stageVariant === "back");
+        var t = stageItem.type;
+        document.getElementById("chipCollar").textContent = t === "pants" ? "ခါးပတ်" : (t === "hoodie" ? "ခေါင်းစွပ်" : "လည်ပင်း");
+        document.getElementById("chipPrint").textContent = t === "jersey" ? "Logo / နံပါတ်" : (t === "pants" ? "အိတ်ကပ်" : (stageItem.graphic ? "Print ဒီဇိုင်း" : "ရင်ဘတ်"));
+        document.getElementById("stageNote").textContent = noteFor(zoomState.kind);
+        renderSwatches();
         var isJersey = stageItem.type === "jersey";
         document.getElementById("stageTags").hidden = !isJersey;
         if (isJersey){
@@ -1059,9 +1199,79 @@
           document.getElementById("tagBack").classList.toggle("sel", stageVariant === "back");
         }
       }
+      /* ---------- stage inspection: zoom focus, notes, same-rail colourways ---------- */
+      var zoomState = {kind:"full", s:1, ox:50, oy:50};
+      function zoomPreset(kind){
+        var pants = stageItem && stageItem.type === "pants";
+        if (kind === "collar") return pants ? {s:2.2, ox:50, oy:26} : {s:2.15, ox:50, oy:22};
+        if (kind === "print") return pants ? {s:2, ox:50, oy:34} : {s:2, ox:50, oy:50};
+        if (kind === "fabric") return pants ? {s:2.3, ox:50, oy:64} : {s:2.35, ox:50, oy:76};
+        return {s:1, ox:50, oy:50};
+      }
+      function noteFor(kind){
+        var t = stageItem.type;
+        if (kind === "collar"){
+          if (t === "pants") return "ခါးပတ်၊ ခလုတ်နဲ့ ချုပ်ရိုးလိုင်းကို အနီးကပ် ပြထားပါတယ်";
+          if (t === "hoodie") return "ခေါင်းစွပ် အတွင်းသားနဲ့ ကြိုးစည်းပုံကို အနီးကပ် ပြထားပါတယ်";
+          return "လည်ပင်း Rib ချုပ်ရိုးနဲ့ ပုခုံးချုပ်လိုင်းကို အနီးကပ် ပြထားပါတယ်";
+        }
+        if (kind === "print"){
+          if (t === "jersey") return stageVariant === "back" ? "နောက်ဘက် နံပါတ် 25 ဆေးရိုက်ပုံကို အနီးကပ် ပြထားပါတယ်" : "ရင်ဘတ် Logo နဲ့ V-လည်ပင်း Trim ကို အနီးကပ် ပြထားပါတယ်";
+          if (t === "pants") return "အိတ်ကပ် မျဉ်းကွေးနဲ့ ချုပ်ရိုးကို အနီးကပ် ပြထားပါတယ်";
+          if (stageItem.graphic) return "ရင်ဘတ် Print ဒီဇိုင်းရဲ့ ဆေးသားကို အနီးကပ် ပြထားပါတယ်";
+          return "ရင်ဘတ်ပိုင်းကို အနီးကပ် ပြထားပါတယ် — ချုပ်ရိုး ရှင်းရှင်းလင်းလင်း မြင်ရပါတယ်";
+        }
+        if (kind === "fabric") return "အဝတ်သား အမျှင်ယက်ပုံနဲ့ ချုပ်ရိုးလိုင်းကို အနီးကပ် ပြထားပါတယ် — လက်နဲ့ ကိုင်စမ်းကြည့်နေသလို ခံစားကြည့်ပါ";
+        return "တစ်ထည်လုံး ပုံ — အရောင်ပြောင်းချင်ရင် အောက်က တူညီတဲ့တန်းက အထည်လေးတွေ နှိပ်ပါ၊ အနီးကပ်ကြည့်ချင်ရင် အထက်က ခလုတ်တွေ နှိပ်ပါ";
+      }
+      function setZoom(kind){
+        if (!stageItem) return;
+        var p = zoomPreset(kind);
+        zoomState = {kind:kind, s:p.s, ox:p.ox, oy:p.oy};
+        var z = document.getElementById("stageZoom");
+        z.style.transformOrigin = p.ox + "% " + p.oy + "%";
+        z.style.transform = p.s > 1 ? "scale(" + p.s + ")" : "";
+        document.querySelectorAll(".dchip").forEach(function(c){ c.classList.toggle("sel", c.getAttribute("data-zoom") === kind); });
+        document.getElementById("stageNote").textContent = noteFor(kind);
+      }
+      function renderSwatches(){
+        var box = document.getElementById("railSwatches");
+        box.innerHTML = "";
+        if (!stageItem || !stageItem.groupRef) return;
+        stageItem.groupRef.items.forEach(function(sib){
+          var b = document.createElement("button");
+          b.type = "button";
+          b.className = "rswatch" + (sib === stageItem ? " sel" : "");
+          b.setAttribute("aria-label", sib.name + " — ဒီအရောင် ပြောင်းကြည့်ရန်");
+          b.innerHTML = garmentSVG({type:sib.type, fill:sib.fill, trim:sib.trim, graphic:sib.graphic, back:false});
+          b.addEventListener("click", function(){
+            if (sib === stageItem) return;
+            stageItem = sib; stageVariant = "front";
+            setZoom("full");
+            renderStage();
+          });
+          box.appendChild(b);
+        });
+      }
+      document.getElementById("viewFront").addEventListener("click", function(){ stageVariant = "front"; renderStage(); });
+      document.getElementById("viewBack").addEventListener("click", function(){ stageVariant = "back"; renderStage(); });
+      document.querySelectorAll(".dchip").forEach(function(c){
+        c.addEventListener("click", function(){ setZoom(c.getAttribute("data-zoom")); });
+      });
+      var stageZoomEl = document.getElementById("stageZoom");
+      stageZoomEl.addEventListener("mousemove", function(e){
+        if (zoomState.s <= 1) return;
+        var r = stageZoomEl.getBoundingClientRect();
+        var px = (e.clientX - r.left) / Math.max(1, r.width), py = (e.clientY - r.top) / Math.max(1, r.height);
+        stageZoomEl.style.transformOrigin = (zoomState.ox + (px - .5) * 16).toFixed(1) + "% " + (zoomState.oy + (py - .5) * 16).toFixed(1) + "%";
+      });
+      stageZoomEl.addEventListener("mouseleave", function(){
+        stageZoomEl.style.transformOrigin = zoomState.ox + "% " + zoomState.oy + "%";
+      });
       function pickGarment(item, btn){
         if (!stageEl.hidden) return;
         stageItem = item; stageVariant = "front";
+        setZoom("full");
         var idx = allRailBtns.indexOf(btn);
         allRailBtns.forEach(function(el, j){
           var d = Math.min(Math.abs(j - idx), 6);
@@ -1077,6 +1287,7 @@
         }, 880);
       }
       document.getElementById("stageBack").addEventListener("click", function(){
+        setZoom("full");
         stageEl.hidden = true;
         railsEl.style.display = "";
         setTimeout(function(){
